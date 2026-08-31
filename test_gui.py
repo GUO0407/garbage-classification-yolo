@@ -24,7 +24,28 @@ ctk.set_default_color_theme("dark-blue")
 
 # Config Paths
 MODEL_PATH = "best.pt"
-TEST_IMAGES_DIR = args.path if os.path.exists(args.path) else "custom_dataset/test/images"
+REPO_ROOT = os.path.dirname(os.path.abspath(__file__))
+DEFAULT_DATASET_DIR = os.path.join(REPO_ROOT, "custom_dataset")
+
+
+def list_image_folders(dataset_dir: str) -> list[str]:
+    """列出資料夾中所有「含有圖片」的目錄，依路徑排序（含根目錄本身若含圖）"""
+    folders = []
+    if os.path.isdir(dataset_dir):
+        root_has_img = any(glob.glob(os.path.join(dataset_dir, ext)) for ext in IMAGE_EXTS)
+        if root_has_img:
+            folders.append(dataset_dir)
+        for dirpath, _dirnames, filenames in os.walk(dataset_dir):
+            rel = os.path.relpath(dirpath, dataset_dir)
+            if rel == "." or "demo_backup" in rel.split(os.sep):
+                continue
+            if any(glob.glob(os.path.join(dirpath, ext)) for ext in IMAGE_EXTS):
+                folders.append(dirpath)
+    folders.sort()
+    return folders
+
+
+IMAGE_EXTS = ["*.jpg", "*.jpeg", "*.png", "*.webp"]
 
 # BGR Colors for OpenCV rendering
 CLASS_COLORS = {
@@ -46,6 +67,21 @@ def obb_iou(pts1, pts2):
     if union_area <= 0:
         return 0.0
     return inter_area / union_area
+
+def depth_to_jet_display(depth_mm: np.ndarray) -> np.ndarray | None:
+    """uint16 mm -> JET BGR uint8，0=黑色無效區；percentile + 2m cap 自適應刻度"""
+    if depth_mm.dtype != np.uint16 or depth_mm.size == 0:
+        return None
+    valid = depth_mm[depth_mm > 0]
+    if valid.size == 0:
+        return np.zeros((depth_mm.shape[0], depth_mm.shape[1], 3), dtype=np.uint8)
+    lo, hi = np.percentile(valid, (2, 98))
+    hi = max(float(hi), 2000.0)
+    clipped = np.clip(depth_mm, lo, hi).astype(np.float32)
+    norm8 = ((clipped - lo) / (hi - lo + 1e-6)).astype(np.float32) * 255.0
+    jet = cv2.applyColorMap(norm8.astype(np.uint8), cv2.COLORMAP_JET)
+    return cv2.cvtColor(jet, cv2.COLOR_RGB2BGR)
+
 
 def apply_agnostic_nms(boxes_list, iou_thresh=0.40):
     """跨類別 NMS：若多個不同類別的框重疊，只保留最高信心度的那一個"""
@@ -76,7 +112,7 @@ class App(ctk.CTk):
         # --- Sidebar Frame ---
         self.sidebar_frame = ctk.CTkFrame(self, width=280, corner_radius=0)
         self.sidebar_frame.grid(row=0, column=0, sticky="nsew")
-        self.sidebar_frame.grid_rowconfigure(11, weight=1)
+        self.sidebar_frame.grid_rowconfigure(12, weight=1)
 
         self.logo_label = ctk.CTkLabel(
             self.sidebar_frame, 
@@ -93,13 +129,38 @@ class App(ctk.CTk):
         )
         self.model_status_label.grid(row=1, column=0, padx=20, pady=(0, 15))
 
+        # Dataset folder dropdown (相對路徑顯示，abspath 存在 dict)
+        self._folder_display_to_path: dict[str, str] = {
+            os.path.relpath(f, REPO_ROOT): f for f in list_image_folders(DEFAULT_DATASET_DIR)
+        }
+        if not any(os.path.realpath(p) == os.path.realpath(args.path) for p in self._folder_display_to_path.values()):
+            if os.path.isdir(args.path):
+                self._folder_display_to_path[os.path.relpath(args.path, REPO_ROOT)] = args.path
+        self.folder_dropdown = ctk.CTkOptionMenu(
+            self.sidebar_frame,
+            values=sorted(self._folder_display_to_path.keys()),
+            command=self.on_folder_change,
+            font=ctk.CTkFont(size=12),
+        )
+        # 預設選 --path 指向的資料夾；否則選 custom_dataset 根
+        default_display = (
+            os.path.relpath(args.path, REPO_ROOT)
+            if os.path.isdir(args.path) and os.path.relpath(args.path, REPO_ROOT) in self._folder_display_to_path
+            else "custom_dataset"
+        )
+        self.folder_dropdown.set(default_display)
+        self.current_image_dir: str = self._folder_display_to_path.get(
+            default_display, DEFAULT_DATASET_DIR
+        )
+        self.folder_dropdown.grid(row=2, column=0, padx=20, pady=(0, 12), sticky="ew")
+
         # Confidence Slider
         self.conf_label = ctk.CTkLabel(
             self.sidebar_frame, 
             text="Confidence: 0.60", 
             anchor="w"
         )
-        self.conf_label.grid(row=2, column=0, padx=20, pady=(5, 0), sticky="w")
+        self.conf_label.grid(row=3, column=0, padx=20, pady=(5, 0), sticky="w")
         
         self.conf_slider = ctk.CTkSlider(
             self.sidebar_frame, 
@@ -109,7 +170,7 @@ class App(ctk.CTk):
             command=self.update_sliders
         )
         self.conf_slider.set(0.60)
-        self.conf_slider.grid(row=3, column=0, padx=20, pady=(5, 10))
+        self.conf_slider.grid(row=4, column=0, padx=20, pady=(5, 10))
 
         # NMS IoU Slider
         self.iou_label = ctk.CTkLabel(
@@ -117,7 +178,7 @@ class App(ctk.CTk):
             text="Agnostic NMS IoU: 0.40", 
             anchor="w"
         )
-        self.iou_label.grid(row=4, column=0, padx=20, pady=(5, 0), sticky="w")
+        self.iou_label.grid(row=5, column=0, padx=20, pady=(5, 0), sticky="w")
         
         self.iou_slider = ctk.CTkSlider(
             self.sidebar_frame, 
@@ -127,7 +188,7 @@ class App(ctk.CTk):
             command=self.update_sliders
         )
         self.iou_slider.set(0.40)
-        self.iou_slider.grid(row=5, column=0, padx=20, pady=(5, 15))
+        self.iou_slider.grid(row=6, column=0, padx=20, pady=(5, 15))
 
         # Agnostic NMS Switch (跨類別抑制)
         self.agnostic_switch = ctk.CTkSwitch(
@@ -136,7 +197,7 @@ class App(ctk.CTk):
             command=self.run_inference
         )
         self.agnostic_switch.select()
-        self.agnostic_switch.grid(row=6, column=0, padx=20, pady=(5, 10), sticky="w")
+        self.agnostic_switch.grid(row=7, column=0, padx=20, pady=(5, 10), sticky="w")
 
         # Grasp Pose Switch (預設開啟)
         self.grasp_switch = ctk.CTkSwitch(
@@ -145,7 +206,7 @@ class App(ctk.CTk):
             command=self.run_inference
         )
         self.grasp_switch.select()
-        self.grasp_switch.grid(row=7, column=0, padx=20, pady=(5, 15), sticky="w")
+        self.grasp_switch.grid(row=8, column=0, padx=20, pady=(5, 15), sticky="w")
 
         self.load_btn = ctk.CTkButton(
             self.sidebar_frame, 
@@ -154,7 +215,7 @@ class App(ctk.CTk):
             height=36,
             font=ctk.CTkFont(size=14, weight="bold")
         )
-        self.load_btn.grid(row=8, column=0, padx=20, pady=(5, 5))
+        self.load_btn.grid(row=9, column=0, padx=20, pady=(5, 5))
 
         self.select_btn = ctk.CTkButton(
             self.sidebar_frame, 
@@ -165,11 +226,11 @@ class App(ctk.CTk):
             hover_color="#326ba3",
             font=ctk.CTkFont(size=14, weight="bold")
         )
-        self.select_btn.grid(row=9, column=0, padx=20, pady=(5, 10))
+        self.select_btn.grid(row=10, column=0, padx=20, pady=(5, 10))
 
         # Legend Box
         self.legend_frame = ctk.CTkFrame(self.sidebar_frame, fg_color="transparent")
-        self.legend_frame.grid(row=10, column=0, padx=20, pady=10, sticky="w")
+        self.legend_frame.grid(row=11, column=0, padx=20, pady=10, sticky="w")
         
         legend_items = [
             ("Plastic", "#2ecc71"),
@@ -203,6 +264,7 @@ class App(ctk.CTk):
         self.current_tk_image = None
         self.current_image_path = None
         self.raw_image_bgr = None
+        self.current_depth_jet: np.ndarray | None = None
 
         # Load the custom trained model
         self.update()
@@ -236,6 +298,32 @@ class App(ctk.CTk):
         if self.current_image_path and self.raw_image_bgr is not None:
             self.run_inference()
 
+    def on_folder_change(self, display_name):
+        self.current_image_dir = self._folder_display_to_path.get(display_name, DEFAULT_DATASET_DIR)
+        self.load_random_image()
+
+    def find_depth_for(self, image_path: str) -> np.ndarray | None:
+        """找同 stem 的 depth：優先 {stem}_depth.npy（uint16 mm），回退 {stem}_depth_jet.png。
+        支援 capture_dataset.py 的命名（NNNN_color.png 配 NNNN_depth.{npy,png}_jet）"""
+        d = os.path.dirname(os.path.abspath(image_path))
+        stem = os.path.splitext(os.path.basename(image_path))[0]
+        candidates = [stem]
+        if stem.endswith("_color"):
+            candidates.insert(0, stem[: -len("_color")])
+        for base in candidates:
+            npy_path = os.path.join(d, f"{base}_depth.npy")
+            if os.path.exists(npy_path):
+                depth_mm = np.load(npy_path)
+                if isinstance(depth_mm, np.ndarray) and depth_mm.dtype == np.uint16:
+                    return depth_to_jet_display(depth_mm)
+                continue
+            jet_path = os.path.join(d, f"{base}_depth_jet.png")
+            if os.path.exists(jet_path):
+                depth_jet = cv2.imread(jet_path, cv2.IMREAD_COLOR)
+                if depth_jet is not None:
+                    return depth_jet
+        return None
+
     def load_image_from_path(self, file_path):
         if not file_path or not os.path.exists(file_path):
             return
@@ -263,25 +351,30 @@ class App(ctk.CTk):
         if self.raw_image_bgr is None:
             self.model_status_label.configure(text="Decode Error", text_color="#dc3545")
             return
-            
+
+        self.current_depth_jet = self.find_depth_for(file_path)
         self.run_inference()
 
     def load_random_image(self):
-        extensions = ["*.jpg", "*.jpeg", "*.png", "*.webp"]
         images = []
-        for ext in extensions:
-            images.extend(glob.glob(os.path.join(TEST_IMAGES_DIR, ext)))
-            images.extend(glob.glob(os.path.join(TEST_IMAGES_DIR, ext.upper())))
+        for ext in IMAGE_EXTS:
+            images.extend(glob.glob(os.path.join(self.current_image_dir, ext)))
+            images.extend(glob.glob(os.path.join(self.current_image_dir, ext.upper())))
+        # 深度預覽圖不是資料圖，排除掉
+        images = [p for p in images if not os.path.basename(p).endswith("_depth_jet.png")]
 
         if not images:
-            self.model_status_label.configure(text="No images in test/images", text_color="#dc3545")
+            self.model_status_label.configure(
+                text=f"No images in {os.path.relpath(self.current_image_dir, REPO_ROOT)}",
+                text_color="#dc3545",
+            )
             return
-            
+
         selected = random.choice(images)
         self.load_image_from_path(selected)
 
     def select_image_file(self):
-        initial_dir = os.path.abspath(TEST_IMAGES_DIR) if os.path.exists(TEST_IMAGES_DIR) else os.getcwd()
+        initial_dir = self.current_image_dir if os.path.isdir(self.current_image_dir) else os.getcwd()
         filetypes = [
             ("Image Files", "*.jpg *.jpeg *.png *.webp *.bmp *.JPG *.JPEG *.PNG *.WEBP *.BMP"),
             ("All Files", "*.*")
@@ -328,14 +421,26 @@ class App(ctk.CTk):
             boxes_list = apply_agnostic_nms(boxes_list, iou_thresh=iou_thresh)
 
         # 4. Clean & Minimalist Rendering
-        annotated = self.raw_image_bgr.copy()
+        img_h, img_w = self.raw_image_bgr.shape[:2]
+        annotated = self._draw_boxes(self.raw_image_bgr.copy(), boxes_list, show_grasp)
+        depth_panel = None
+        if (
+            self.current_depth_jet is not None
+            and self.current_depth_jet.shape[:2] == (img_h, img_w)
+        ):
+            depth_panel = self._draw_boxes(self.current_depth_jet.copy(), boxes_list, show_grasp)
+
+        self.render_panels(annotated, boxes_list, depth_panel)
+
+    def _draw_boxes(self, annotated: np.ndarray, boxes_list, show_grasp: bool) -> np.ndarray:
+        """在給定圖片上畫 OBB 框 + badge（+Grasp Pose）；回傳同一張圖。RGB 與 JET 深度共用"""
         img_h, img_w = annotated.shape[:2]
-        
+
         # Adaptive font scale and line thickness based on image resolution
         font_scale = max(0.85, min(1.4, img_w / 900.0))
         font_thick = max(2, int(round(font_scale * 2.0)))
         line_thick = max(2, int(round(img_w / 450.0)))
-        
+
         for b in boxes_list:
             cls_id = b['cls']
             color = CLASS_COLORS.get(cls_id, (0, 255, 0))
@@ -395,31 +500,36 @@ class App(ctk.CTk):
                 cv2.line(annotated, p3, p4, (0, 255, 255), max(2, line_thick), cv2.LINE_AA)
                 cv2.circle(annotated, (int(cx), int(cy)), max(4, line_thick + 2), (0, 0, 255), -1, cv2.LINE_AA)
 
-        # 5. Side-by-Side View: Left (Original) | Right (Annotated)
-        raw_display = self.raw_image_bgr.copy()
-        
-        # Tags with dark outline for clear visibility
+        return annotated
+
+    def render_panels(self, annotated: np.ndarray, boxes_list, depth_panel: np.ndarray | None):
+        # 5. Panels (2x2): 左上 Original | 右上 OBB Detection
+        #                  左下 Depth (raw) | 右下 Depth + OBB（無 depth 時退化成上方 1x2）
+        img_h, img_w = annotated.shape[:2]
         tag_scale = max(0.7, min(1.2, img_w / 1000.0))
         tag_thick = max(2, int(round(tag_scale * 2.0)))
-        
-        # Left Tag: Original
-        orig_text = "Original"
-        orig_pos = (18, int(35 * tag_scale + 5))
-        cv2.putText(raw_display, orig_text, orig_pos, cv2.FONT_HERSHEY_SIMPLEX, tag_scale, (0, 0, 0), tag_thick + 3, cv2.LINE_AA)
-        cv2.putText(raw_display, orig_text, orig_pos, cv2.FONT_HERSHEY_SIMPLEX, tag_scale, (255, 255, 255), tag_thick, cv2.LINE_AA)
-        
-        # Right Tag: OBB Detection
-        det_text = f"OBB Detection ({len(boxes_list)} objects)"
-        det_pos = (18, int(35 * tag_scale + 5))
-        cv2.putText(annotated, det_text, det_pos, cv2.FONT_HERSHEY_SIMPLEX, tag_scale, (0, 0, 0), tag_thick + 3, cv2.LINE_AA)
-        cv2.putText(annotated, det_text, det_pos, cv2.FONT_HERSHEY_SIMPLEX, tag_scale, (0, 255, 255), tag_thick, cv2.LINE_AA)
 
-        # Divider between left and right
-        divider_w = max(3, int(img_w / 300.0))
-        divider = np.zeros((img_h, divider_w, 3), dtype=np.uint8)
-        divider[:] = (45, 45, 45)
+        def _tag(canvas: np.ndarray, text: str, color: tuple[int, int, int]):
+            pos = (18, int(35 * tag_scale + 5))
+            cv2.putText(canvas, text, pos, cv2.FONT_HERSHEY_SIMPLEX, tag_scale, (0, 0, 0), tag_thick + 3, cv2.LINE_AA)
+            cv2.putText(canvas, text, pos, cv2.FONT_HERSHEY_SIMPLEX, tag_scale, color, tag_thick, cv2.LINE_AA)
 
-        combined = np.hstack([raw_display, divider, annotated])
+        raw_display = self.raw_image_bgr.copy()
+        _tag(raw_display, "Original", (255, 255, 255))
+        _tag(annotated, f"OBB Detection ({len(boxes_list)} objects)", (0, 255, 255))
+
+        col = np.hstack([raw_display, annotated])
+        if depth_panel is not None:
+            depth_raw = self.current_depth_jet.copy()
+            _tag(depth_raw, "Depth", (255, 255, 0))
+            _tag(depth_panel, "Depth + OBB", (255, 255, 0))
+            col_depth = np.hstack([depth_raw, depth_panel])
+            divider_h = max(3, int(img_h / 300.0))
+            divider = np.zeros((divider_h, img_w * 2, 3), dtype=np.uint8)
+            divider[:] = (45, 45, 45)
+            combined = np.vstack([col, divider, col_depth])
+        else:
+            combined = col
         self.show_image(combined)
 
     def on_canvas_resize(self, event):

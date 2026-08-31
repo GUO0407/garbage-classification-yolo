@@ -83,8 +83,10 @@ python train.py
 ### 3. 圖形化推論與夾爪姿態測試 ([`test_gui.py`](test_gui.py))
 即時預測 OBB 旋轉框，支援跨類別 Agnostic NMS 消除重複，並可視化展示夾爪抓取輔助線與角度文字（Yaw $\theta$）。
 ```bash
-python test_gui.py
+python test_gui.py [--path <images_dir>]
 ```
+- **資料夾下拉選單**：左側欄可以切換要載入圖片的資料夾（自動列出 `custom_dataset/` 下所有含圖目錄），「Load Random Image」與選檔皆以目前選定資料夾為準。
+- **2×2 四格顯示**：左上＝原圖、右上＝OBB 標注、左下＝JET 深度原圖、右下＝深度＋同一組 OBB 標注。下方兩格只在圖片旁存在對應 `{stem}_depth.npy`（uint16, mm）或 `{stem}_depth_jet.png` 時出現；舊資料（無 depth）維持上方 1×2。支援 `capture_dataset.py` 的 `NNNN_color.png ↔ NNNN_depth.*` 命名配對；深度檔由該工具拍照產生（見 §7）。
 
 ### 4. 模型評估與 mAP 分析 ([`evaluate.py`](evaluate.py))
 自動檢測模型為 OBB 或 HBB，並在測試集上計算 Precision, Recall, mAP@50 與 mAP@50-95。
@@ -103,6 +105,22 @@ python auto_label.py
 ```bash
 python make_demo_gif.py
 ```
+
+### 7. RealSense 拍照工具（RGB + aligned depth 配對）([`capture_dataset.py`](capture_dataset.py))
+相機已起（`dual_amm dual_amm_arm_core.launch.py`）的狀態下，一鍵存下同一物理幀的 RGB 與對齊深度圖，作為訓練／演示用的離線資料。存檔自動遞增編號、不覆蓋：
+```bash
+# ⚠️ 用「系統 python」＋ source ROS；.venv 沒有灌 rclpy
+source /opt/ros/humble/setup.bash
+python3 capture_dataset.py --side left        # 或 --side right
+# 預設存到 custom_dataset/demo/captures/，可用 --save-dir 指定其他路徑
+```
+每次按 Enter 拍一張（需 color 與 aligned depth 兩路都收到才存，收不到會提示重試），`q`+Enter 或 Ctrl-C 結束。輸出：
+- `NNNN_color.png` — 原始 RGB
+- `NNNN_depth.npy` — 原始 uint16 mm（零損耗，0 = 無效點）
+- `NNNN_depth_jet.png` — JET 熱圖預覽
+
+拍下後直接開 `test_gui.py`，資料夾選單挑 `custom_dataset/demo/captures` 就能看到 2×2 四格（RGB＋OBB 框＋深度＋深度標注）。topic 來源：
+`/arm/camera_{side}/realsense_camera_{side}/color/image_raw` 與 `/arm/camera_{side}/realsense_camera_{side}/aligned_depth_to_color/image_raw`（16UC1, mm）。
 
 ---
 
