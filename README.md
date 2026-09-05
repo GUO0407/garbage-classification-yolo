@@ -83,10 +83,16 @@ python train.py
 ### 3. 圖形化推論與夾爪姿態測試 ([`test_gui.py`](test_gui.py))
 即時預測 OBB 旋轉框，支援跨類別 Agnostic NMS 消除重複，並可視化展示夾爪抓取輔助線與角度文字（Yaw $\theta$）。
 ```bash
-python test_gui.py [--path <images_dir>]
+python test_gui.py [--path <images_dir>] [--fx FLOAT] [--fy FLOAT] [--cx FLOAT] [--cy FLOAT]
 ```
-- **資料夾下拉選單**：左側欄可以切換要載入圖片的資料夾（自動列出 `custom_dataset/` 下所有含圖目錄），「Load Random Image」與選檔皆以目前選定資料夾為準。
+- **資料夾下拉選單**：左側欄可以切換要載入圖片的資料夾（自動列出 `custom_dataset/` 下所有含圖目錄）、「Load Random Image」與選檔皆以目前選定資料夾為準。
 - **2×2 四格顯示**：左上＝原圖、右上＝OBB 標注、左下＝JET 深度原圖、右下＝深度＋同一組 OBB 標注。下方兩格只在圖片旁存在對應 `{stem}_depth.npy`（uint16, mm）或 `{stem}_depth_jet.png` 時出現；舊資料（無 depth）維持上方 1×2。支援 `capture_dataset.py` 的 `NNNN_color.png ↔ NNNN_depth.*` 命名配對；深度檔由該工具拍照產生（見 §7）。
+- **hover-to-inspect**：滑鼠移到「右上／右下」偵測框上，該框以類別色半透明高亮並浮出資訊卡：
+  - `pos` — OBB 中心的 3D 相機座標（**camera frame**，單位 cm）；x 向右、y **向下**（OpenCV 慣例）、z 沿光軸為物體距離。由中心點中值深度 + 針孔反投影（公式與 `robot_utils/pose_estimator.py` 相同）。餵手臂前還需乘 cam→base 外參。
+  - `angle` — OBB yaw $\theta$（deg），夾爪垂直長軸閉合時以此對齊。
+  - `grip` — **實際可夾寬度 (mm)**：取 OBB 較短那條邊（夾爪閉合側）的兩端點，各量 9×9 patch 中值深度反投影成 3D 點後取歐氏距離。無 depth 時退化為像素短邊長並標 `(no depth)`。
+- **depth probe**：滑鼠移到「左下 Depth」整格、或「右下 Depth+OBB 框外區域」，顯示該點的 raw depth（mm）。
+- **內參覆蓋**：`--fx/--fy` 預設 920（D415 1280×720 未存 camera_info 時的合理值）、`--cx/--cy` 預設影像中心；有存 camera_info 時可傳入精確值。
 
 ### 4. 模型評估與 mAP 分析 ([`evaluate.py`](evaluate.py))
 自動檢測模型為 OBB 或 HBB，並在測試集上計算 Precision, Recall, mAP@50 與 mAP@50-95。
