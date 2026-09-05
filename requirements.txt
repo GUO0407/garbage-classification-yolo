@@ -1,2 +1,5 @@
 ultralytics
 customtkinter
+numpy
+opencv-python
+pillow
