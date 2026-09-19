@@ -239,34 +239,23 @@ def on_mouse(event, x, y, flags, param):
     # Compensate for 42px header banner offset
     y_adj = y - 42
 
-    # 1. MOUSE WHEEL FOR ROTATION
-    if event == cv2.EVENT_MOUSEWHEEL:
-        if selected_box_idx >= 0 and selected_box_idx < len(boxes):
-            push_history()
-            delta = 2.0
-            if flags & cv2.EVENT_FLAG_SHIFTKEY:
-                delta = 10.0
-            elif flags & cv2.EVENT_FLAG_CTRLKEY:
-                delta = 0.5
-            
-            # Check wheel direction
-            if flags > 0:
-                boxes[selected_box_idx].angle_deg = (boxes[selected_box_idx].angle_deg + delta) % 360.0
-            else:
-                boxes[selected_box_idx].angle_deg = (boxes[selected_box_idx].angle_deg - delta) % 360.0
-        return True   # 吃掉滾輪事件，避免後端預設行為把圖片放大縮小
-
-    # 2. RIGHT CLICK TO DELETE OR DESELECT
-    if event == cv2.EVENT_RBUTTONDOWN:
+    # 1. DOUBLE CLICK TO DELETE
+    if event == cv2.EVENT_LBUTTONDBLCLK:
+        interaction_mode = None
         if y_adj < 0:
             return
         for i in range(len(boxes) - 1, -1, -1):
             if boxes[i].contains_point(x, y_adj):
                 push_history()
-                print(f"🗑️ 刪除框: {CLASS_NAMES[boxes[i].cls_id]}")
+                print(f"🗑️ 雙擊刪除框: {CLASS_NAMES[boxes[i].cls_id]}")
                 boxes.pop(i)
                 selected_box_idx = -1
                 return
+        selected_box_idx = -1
+        return
+
+    # 2. RIGHT CLICK TO DESELECT
+    if event == cv2.EVENT_RBUTTONDOWN:
         selected_box_idx = -1
         return
 
@@ -444,35 +433,22 @@ def render_ui(display_img, img_w, img_h, img_idx, total_imgs, filename, dataset_
     # Selected Box Info / Quick Help
     if selected_box_idx >= 0 and selected_box_idx < len(boxes):
         sel_b = boxes[selected_box_idx]
-        sel_info = f"Selected: {CLASS_NAMES[sel_b.cls_id]} | Angle: {int(sel_b.angle_deg)}° | [0-3]:Change [Wheel]:Rotate [Del]:Remove"
-        cv2.putText(banner, sel_info, (max(10, img_w - 700), 26), cv2.FONT_HERSHEY_SIMPLEX, 0.48, (0, 255, 255), 1, cv2.LINE_AA)
+        sel_info = f"Selected: {CLASS_NAMES[sel_b.cls_id]} | Angle: {int(sel_b.angle_deg)}° | [0-3]:Class [ [ / ] ]:Rotate [Del/DblClick]:Remove"
+        cv2.putText(banner, sel_info, (max(10, img_w - 750), 26), cv2.FONT_HERSHEY_SIMPLEX, 0.48, (0, 255, 255), 1, cv2.LINE_AA)
     else:
-        hint_text = "Drag:Draw New | Click:Select | A:Prev D:Next T:Switch-Dataset Q:Quit"
-        cv2.putText(banner, hint_text, (max(10, img_w - 630), 26), cv2.FONT_HERSHEY_SIMPLEX, 0.48, (200, 200, 200), 1, cv2.LINE_AA)
+        hint_text = "Drag:Draw New | Click:Select | DblClick:Remove | A:Prev D:Next T:Switch-Dataset Q:Quit"
+        cv2.putText(banner, hint_text, (max(10, img_w - 700), 26), cv2.FONT_HERSHEY_SIMPLEX, 0.48, (200, 200, 200), 1, cv2.LINE_AA)
 
     # Combine Banner and Image
     final_canvas = np.vstack([banner, display_img])
     return final_canvas
 
-def _suppress_win32_context_menu(window_name):
-    """Win32：移除視窗右鍵系統選單（Restore/Move/Size...）；非 Windows 或找不到視窗就跳過。"""
-    try:
-        import ctypes
-        user32 = ctypes.windll.user32
-        hwnd = user32.FindWindowW(None, window_name)
-        if hwnd:
-            user32.GetSystemMenu(hwnd, False)
-    except Exception:
-        pass
-
-
 def main():
     global current_dataset_idx, boxes, selected_box_idx, history_stack
 
     window_name = "YOLO OBB Smart Annotation & Review Tool"
-    cv2.namedWindow(window_name, cv2.WINDOW_AUTOSIZE)
+    cv2.namedWindow(window_name, cv2.WINDOW_AUTOSIZE | cv2.WINDOW_GUI_NORMAL)
     cv2.setMouseCallback(window_name, on_mouse)
-    _suppress_win32_context_menu(window_name)
 
     print("\n" + "="*55)
     print(" 🚀 YOLO OBB (Oriented Bounding Box) 旋轉標註工具已啟動")
@@ -480,12 +456,12 @@ def main():
     print("🎮 操作說明：")
     print("  • 左鍵點擊框     : 選取該框（顯示旋轉與縮放把手）")
     print("  • 拖曳黃色把手   : 自由旋轉角度")
-    print("  • 滑鼠滾輪       : 旋轉角度微調（Shift=10°、Ctrl=0.5°）")
+    print("  • [ / ] 鍵       : 旋轉角度微調（[ 逆時針 -2°, ] 順時針 +2°, { / } ±10°）")
     print("  • 拖曳角落/邊緣  : 等比 / 長寬拉伸（保持 90 度矩形）")
     print("  • 拖曳框中心     : 移動框位置")
     print("  • 空白處拖曳     : 畫出新框")
     print("  • 數字鍵 0~3     : 快速切換選取框的類別 (0:塑膠, 1:金屬, 2:紙類, 3:一般)")
-    print("  • Delete / X / 右鍵: 刪除選取框")
+    print("  • 雙擊左鍵 / Del / X: 刪除選取框")
     print("  • A / D / Space  : 上一張 / 下一張（自動存檔）")
     print("  • T 鍵           : 切換 pool / train / val / test 資料集")
     print("  • Q / Esc        : 儲存並離開")
@@ -493,7 +469,6 @@ def main():
 
     img_idx = 0
     extensions = ["*.jpg", "*.jpeg", "*.png", "*.webp"]
-    is_first_scan = True
 
     while True:
         dataset_name = DATASETS[current_dataset_idx]
@@ -522,21 +497,9 @@ def main():
             if key == ord('t'):
                 current_dataset_idx = (current_dataset_idx + 1) % len(DATASETS)
                 img_idx = 0
-                is_first_scan = True
                 continue
             else:
                 break
-
-        # 首次啟動或切換資料集時，自動跳轉至第一張「尚未標註」的新照片
-        if is_first_scan:
-            for idx_check, p_check in enumerate(image_paths):
-                chk_name, _ = os.path.splitext(os.path.basename(p_check))
-                chk_txt = os.path.join(labels_dir, chk_name + ".txt")
-                if not os.path.exists(chk_txt) or os.path.getsize(chk_txt) == 0:
-                    img_idx = idx_check
-                    print(f"📍 自動定位至尚未標註的第一張新圖片: [第 {img_idx+1} / {len(image_paths)} 張] {os.path.basename(p_check)}")
-                    break
-            is_first_scan = False
 
         img_idx = max(0, min(img_idx, len(image_paths) - 1))
         img_path = image_paths[img_idx]
@@ -578,6 +541,16 @@ def main():
                         push_history()
                         boxes[selected_box_idx].cls_id = CLASSES[key][0]
                         print(f"🏷️ 標籤已修改為: {CLASSES[key][1]}")
+
+                elif key in [ord('['), ord('{'), ord(']'), ord('}')]:
+                    if selected_box_idx >= 0 and selected_box_idx < len(boxes):
+                        push_history()
+                        # [ 逆時針微調 (-2°), ] 順時針微調 (+2°)
+                        # { 逆時針大幅 (-10°), } 順時針大幅 (+10°)
+                        delta = 2.0 if key in [ord(']'), ord('}')] else -2.0
+                        if key in [ord('{'), ord('}')]:
+                            delta = 10.0 if key == ord('}') else -10.0
+                        boxes[selected_box_idx].angle_deg = (boxes[selected_box_idx].angle_deg + delta) % 360.0
 
                 elif key in [ord('x'), ord('X'), 8, 127] or raw_key in [65535, 0xFFFF]: # 'x', Backspace, Delete
                     if selected_box_idx >= 0 and selected_box_idx < len(boxes):

@@ -12,15 +12,16 @@
 
 ```mermaid
 graph TD
-    A[俯瞰圖片 custom_dataset] --> B(label_tool.py: 旋轉框互動標註)
-    B --> C[custom_dataset.yaml]
+    A[Master 資料池 custom_dataset/pool] --> B(label_tool.py: 旋轉框互動標註)
+    B --> C(split_dataset.py: 分層平衡切分)
+    C --> D[train / val / test & custom_dataset.yaml]
     
-    D[yolo11x-obb.pt 官方預訓練權重] --> E(train.py)
-    C --> E
+    E[yolo11x-obb.pt 官方預訓練權重] --> F(train.py)
+    D --> F
     
-    E -->|端到端全權重訓練| F[專屬 4 類 OBB 模型 best.pt]
-    F --> G(test_gui.py: 夾爪抓取姿態可視化)
-    F --> H(evaluate.py: OBB mAP 評估分析)
+    F -->|端到端全權重訓練| G[專屬 4 類 OBB 模型 best.pt]
+    G --> H(test_gui.py: 夾爪抓取姿態可視化)
+    G --> I(evaluate.py: OBB mAP 評估分析)
 ```
 
 ---
@@ -66,27 +67,36 @@ python label_tool.py
 - **向下相容**：自動將舊有的 5 欄位水平標籤 (HBB) 載入為初始角度為 $0^\circ$ 的矩形。
 - **選取框**：滑鼠左鍵點選框，顯示黃色旋轉手把與角落/邊緣拉伸節點。
 - **旋轉角度**：
-  - 拖曳頂部**黃色旋轉手把**。
-  - 選取狀態下滾動**滑鼠滾輪**（或按 `R` / `E` / `[` / `]`）。
+  - 拖曳頂部**黃色旋轉手把**自由旋轉。
+  - 按鍵盤 `[`（逆時針 -2°）或 `]`（順時針 +2°）微調（`{` / `}` 為 ±10° 大幅度旋轉）。
 - **長寬拉伸**：拖曳角落或邊緣小方塊（嚴格維持 90 度矩形幾何）。
 - **切換類別**：按鍵盤數字鍵 `0` ~ `3` 即時切換。
-- **刪除標籤**：按鍵盤 `Delete` / `Backspace` / `X` 或滑鼠右鍵點擊。
-- **切換資料集**：按 `T` 鍵可在 `train` 與 `test` 資料夾間無縫切換。
+- **刪除標籤**：按鍵盤 `Delete` / `Backspace` / `X` 或在標籤框上**雙擊左鍵**。
+- **切換資料集**：按 `T` 鍵可在 `pool`、`train`、`val` 與 `test` 資料夾間循環切換。
 - **換頁與儲存**：`A` (上一張), `D` / `Space` (下一張並自動儲存), `Q` (儲存退出)。
 
-### 2. 端到端 OBB 訓練 ([`train.py`](train.py))
+### 2. 資料集分層平衡抽樣工具 ([`split_dataset.py`](split_dataset.py))
+將 Master 資料池（`custom_dataset/pool`）依照多標籤類別分佈與最大餘數法進行分層抽樣，重切為 70% `train` / 15% `val` / 15% `test`。
+```bash
+python split_dataset.py [--source pool] [--seed 42]
+```
+- `--source pool`（預設）：以 `pool` 為 Master 來源，透過複製方式產生三分割，保留原始 Master 資料池不變。
+- `--source splits`：舊模式，將既有 `train`/`val`/`test` 全部混洗後重新分配。
+- 自動維持各分割間的類別平衡與負樣本分佈，解決類別不均問題。
+
+### 3. 端到端 OBB 訓練 ([`train.py`](train.py))
 直接以 `yolo11x-obb.pt` 為基底，在 `custom_dataset` 進行 300 輪全權重訓練。
 ```bash
 python train.py
 ```
 
-### 3. 圖形化推論與夾爪姿態測試 ([`test_gui.py`](test_gui.py))
+### 4. 圖形化推論與夾爪姿態測試 ([`test_gui.py`](test_gui.py))
 即時預測 OBB 旋轉框，支援跨類別 Agnostic NMS 消除重複，並可視化展示夾爪抓取輔助線與角度文字（Yaw $\theta$）。
 ```bash
 python test_gui.py [--path <images_dir>] [--fx FLOAT] [--fy FLOAT] [--cx FLOAT] [--cy FLOAT]
 ```
 - **資料夾下拉選單**：左側欄可以切換要載入圖片的資料夾（自動列出 `custom_dataset/` 下所有含圖目錄）、「Load Random Image」與選檔皆以目前選定資料夾為準。
-- **2×2 四格顯示**：左上＝原圖、右上＝OBB 標注、左下＝JET 深度原圖、右下＝深度＋同一組 OBB 標注。下方兩格只在圖片旁存在對應 `{stem}_depth.npy`（uint16, mm）或 `{stem}_depth_jet.png` 時出現；舊資料（無 depth）維持上方 1×2。支援 `capture_dataset.py` 的 `NNNN_color.png ↔ NNNN_depth.*` 命名配對；深度檔由該工具拍照產生（見 §7）。
+- **2×2 四格顯示**：左上＝原圖、右上＝OBB 標注、左下＝JET 深度原圖、右下＝深度＋同一組 OBB 標注。下方兩格只在圖片旁存在對應 `{stem}_depth.npy`（uint16, mm）或 `{stem}_depth_jet.png` 時出現；舊資料（無 depth）維持上方 1×2。支援 `capture_dataset.py` 的 `NNNN_color.png ↔ NNNN_depth.*` 命名配對；深度檔由該工具拍照產生（見 §8）。
 - **hover-to-inspect**：滑鼠移到「右上／右下」偵測框上，該框以類別色半透明高亮並浮出資訊卡：
   - `pos` — OBB 中心的 3D 相機座標（**camera frame**，單位 cm）；x 向右、y **向下**（OpenCV 慣例）、z 沿光軸為物體距離。由中心點中值深度 + 針孔反投影（公式與 `robot_utils/pose_estimator.py` 相同）。餵手臂前還需乘 cam→base 外參。
   - `angle` — OBB yaw $\theta$（deg），夾爪垂直長軸閉合時以此對齊。
@@ -94,25 +104,25 @@ python test_gui.py [--path <images_dir>] [--fx FLOAT] [--fy FLOAT] [--cx FLOAT] 
 - **depth probe**：滑鼠移到「左下 Depth」整格、或「右下 Depth+OBB 框外區域」，顯示該點的 raw depth（mm）。
 - **內參覆蓋**：`--fx/--fy` 預設 920（D415 1280×720 未存 camera_info 時的合理值）、`--cx/--cy` 預設影像中心；有存 camera_info 時可傳入精確值。
 
-### 4. 模型評估與 mAP 分析 ([`evaluate.py`](evaluate.py))
+### 5. 模型評估與 mAP 分析 ([`evaluate.py`](evaluate.py))
 自動檢測模型為 OBB 或 HBB，並在測試集上計算 Precision, Recall, mAP@50 與 mAP@50-95。
 ```bash
 python evaluate.py
 ```
 
-### 5. AI 半自動預標註工具 ([`auto_label.py`](auto_label.py))
+### 6. AI 半自動預標註工具 ([`auto_label.py`](auto_label.py))
 一鍵使用當前最佳的 `best.pt` 模型為所有新加入、尚未標註的照片自動產生初始 OBB 旋轉框，減少手動標註時間。
 ```bash
 python auto_label.py
 ```
 
-### 6. 展示動圖產生器 ([`make_demo_gif.py`](make_demo_gif.py))
+### 7. 展示動圖產生器 ([`make_demo_gif.py`](make_demo_gif.py))
 一鍵將測試集預測結果輸出為每幀 1 秒的高畫質展示動圖 `demo.gif`。
 ```bash
 python make_demo_gif.py
 ```
 
-### 7. RealSense 拍照工具（RGB + aligned depth 配對）([`capture_dataset.py`](capture_dataset.py))
+### 8. RealSense 拍照工具（RGB + aligned depth 配對）([`capture_dataset.py`](capture_dataset.py))
 相機已起（`dual_amm dual_amm_arm_core.launch.py`）的狀態下，一鍵存下同一物理幀的 RGB 與對齊深度圖，作為訓練／演示用的離線資料。存檔自動遞增編號、不覆蓋：
 ```bash
 # ⚠️ 用「系統 python」＋ source ROS；.venv 沒有灌 rclpy
