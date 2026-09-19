@@ -6,7 +6,7 @@ import numpy as np
 import cv2
 
 DATASET_ROOT = "custom_dataset"
-DATASETS = ["train", "val", "test"]
+DATASETS = ["pool", "train", "val", "test"]
 
 def auto_standardize_filenames(dataset_name):
     """
@@ -167,13 +167,6 @@ def push_history():
     if len(history_stack) > 20:
         history_stack.pop(0)
 
-def undo():
-    global boxes, selected_box_idx, history_stack
-    if history_stack:
-        boxes = history_stack.pop()
-        selected_box_idx = min(selected_box_idx, len(boxes) - 1)
-        print("↩️ 已復原上一步操作")
-
 def load_labels(txt_path, img_w, img_h):
     loaded = []
     if not os.path.exists(txt_path):
@@ -261,7 +254,7 @@ def on_mouse(event, x, y, flags, param):
                 boxes[selected_box_idx].angle_deg = (boxes[selected_box_idx].angle_deg + delta) % 360.0
             else:
                 boxes[selected_box_idx].angle_deg = (boxes[selected_box_idx].angle_deg - delta) % 360.0
-            return
+        return True   # 吃掉滾輪事件，避免後端預設行為把圖片放大縮小
 
     # 2. RIGHT CLICK TO DELETE OR DESELECT
     if event == cv2.EVENT_RBUTTONDOWN:
@@ -451,7 +444,7 @@ def render_ui(display_img, img_w, img_h, img_idx, total_imgs, filename, dataset_
     # Selected Box Info / Quick Help
     if selected_box_idx >= 0 and selected_box_idx < len(boxes):
         sel_b = boxes[selected_box_idx]
-        sel_info = f"Selected: {CLASS_NAMES[sel_b.cls_id]} | Angle: {int(sel_b.angle_deg)}° | [0-3]:Change [R/Wheel]:Rotate [Del]:Remove"
+        sel_info = f"Selected: {CLASS_NAMES[sel_b.cls_id]} | Angle: {int(sel_b.angle_deg)}° | [0-3]:Change [Wheel]:Rotate [Del]:Remove"
         cv2.putText(banner, sel_info, (max(10, img_w - 700), 26), cv2.FONT_HERSHEY_SIMPLEX, 0.48, (0, 255, 255), 1, cv2.LINE_AA)
     else:
         hint_text = "Drag:Draw New | Click:Select | A:Prev D:Next T:Switch-Dataset Q:Quit"
@@ -461,12 +454,25 @@ def render_ui(display_img, img_w, img_h, img_idx, total_imgs, filename, dataset_
     final_canvas = np.vstack([banner, display_img])
     return final_canvas
 
+def _suppress_win32_context_menu(window_name):
+    """Win32：移除視窗右鍵系統選單（Restore/Move/Size...）；非 Windows 或找不到視窗就跳過。"""
+    try:
+        import ctypes
+        user32 = ctypes.windll.user32
+        hwnd = user32.FindWindowW(None, window_name)
+        if hwnd:
+            user32.GetSystemMenu(hwnd, False)
+    except Exception:
+        pass
+
+
 def main():
     global current_dataset_idx, boxes, selected_box_idx, history_stack
 
     window_name = "YOLO OBB Smart Annotation & Review Tool"
     cv2.namedWindow(window_name, cv2.WINDOW_AUTOSIZE)
     cv2.setMouseCallback(window_name, on_mouse)
+    _suppress_win32_context_menu(window_name)
 
     print("\n" + "="*55)
     print(" 🚀 YOLO OBB (Oriented Bounding Box) 旋轉標註工具已啟動")
@@ -474,15 +480,14 @@ def main():
     print("🎮 操作說明：")
     print("  • 左鍵點擊框     : 選取該框（顯示旋轉與縮放把手）")
     print("  • 拖曳黃色把手   : 自由旋轉角度")
-    print("  • 滑鼠滾輪 / R / E: 旋轉角度微調（滾輪超方便！）")
+    print("  • 滑鼠滾輪       : 旋轉角度微調（Shift=10°、Ctrl=0.5°）")
     print("  • 拖曳角落/邊緣  : 等比 / 長寬拉伸（保持 90 度矩形）")
     print("  • 拖曳框中心     : 移動框位置")
     print("  • 空白處拖曳     : 畫出新框")
     print("  • 數字鍵 0~3     : 快速切換選取框的類別 (0:塑膠, 1:金屬, 2:紙類, 3:一般)")
     print("  • Delete / X / 右鍵: 刪除選取框")
-    print("  • Z 鍵           : 復原 (Undo)")
     print("  • A / D / Space  : 上一張 / 下一張（自動存檔）")
-    print("  • T 鍵           : 切換 train / val / test 資料集")
+    print("  • T 鍵           : 切換 pool / train / val / test 資料集")
     print("  • Q / Esc        : 儲存並離開")
     print("="*55)
 
@@ -574,33 +579,12 @@ def main():
                         boxes[selected_box_idx].cls_id = CLASSES[key][0]
                         print(f"🏷️ 標籤已修改為: {CLASSES[key][1]}")
 
-                elif key in [ord('r'), ord('['), ord('R'), ord(']'), ord('e'), ord('E')]:
-                    if selected_box_idx >= 0 and selected_box_idx < len(boxes):
-                        push_history()
-                        delta = 3.0 if key in [ord('e'), ord('E'), ord(']'), ord('R')] else -3.0
-                        boxes[selected_box_idx].angle_deg = (boxes[selected_box_idx].angle_deg + delta) % 360.0
-
-                elif key in [ord('+'), ord('=')]:
-                    if selected_box_idx >= 0 and selected_box_idx < len(boxes):
-                        push_history()
-                        boxes[selected_box_idx].w *= 1.05
-                        boxes[selected_box_idx].h *= 1.05
-
-                elif key in [ord('-'), ord('_')]:
-                    if selected_box_idx >= 0 and selected_box_idx < len(boxes):
-                        push_history()
-                        boxes[selected_box_idx].w = max(5.0, boxes[selected_box_idx].w * 0.95)
-                        boxes[selected_box_idx].h = max(5.0, boxes[selected_box_idx].h * 0.95)
-
                 elif key in [ord('x'), ord('X'), 8, 127] or raw_key in [65535, 0xFFFF]: # 'x', Backspace, Delete
                     if selected_box_idx >= 0 and selected_box_idx < len(boxes):
                         push_history()
                         print(f"🗑️ 刪除標籤框: {CLASS_NAMES[boxes[selected_box_idx].cls_id]}")
                         boxes.pop(selected_box_idx)
                         selected_box_idx = -1
-
-                elif key in [ord('z'), ord('Z'), ord('u')]: # Undo
-                    undo()
 
                 elif key in [ord('t'), ord('T')]: # Switch Dataset between train and test
                     save_labels(txt_path, w, h)

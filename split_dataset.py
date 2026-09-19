@@ -76,11 +76,14 @@ def print_summary(summary):
 def main():
     parser = argparse.ArgumentParser(description="將 custom_dataset 依類別平衡分層抽樣重切為 train/val/test")
     parser.add_argument("--seed", type=int, default=42, help="隨機種子 (預設: 42)")
+    parser.add_argument("--source", choices=["pool", "splits"], default="pool",
+                        help="圖片來源：pool（預設，保留 master）或 splits（舊行為：吃掉 train/val/test）")
     args = parser.parse_args()
     random.seed(args.seed)
 
+    source_splits = ["pool"] if args.source == "pool" else OLD_SPLITS
     items = []
-    for split in OLD_SPLITS:
+    for split in source_splits:
         images_dir = os.path.join(DATASET_ROOT, split, "images")
         labels_dir = os.path.join(DATASET_ROOT, split, "labels")
         for img_path in list_images(images_dir):
@@ -158,10 +161,16 @@ def main():
         os.makedirs(tmp_img_dir, exist_ok=True)
         os.makedirs(tmp_lbl_dir, exist_ok=True)
         tmp_img = os.path.join(tmp_img_dir, new_name)
-        shutil.move(item["img_path"], tmp_img)
+        if args.source == "pool":
+            shutil.copy2(item["img_path"], tmp_img)
+        else:
+            shutil.move(item["img_path"], tmp_img)
         if item["label_path"] and os.path.exists(item["label_path"]):
             new_lbl = os.path.join(tmp_lbl_dir, f"{split}_{counter[split]:03d}.txt")
-            shutil.move(item["label_path"], new_lbl)
+            if args.source == "pool":
+                shutil.copy2(item["label_path"], new_lbl)
+            else:
+                shutil.move(item["label_path"], new_lbl)
 
     for split in OLD_SPLITS:
         old_dir = os.path.join(DATASET_ROOT, split)
