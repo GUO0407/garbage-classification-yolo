@@ -1,0 +1,190 @@
+{
+  "version": 1,
+  "image": "train_354.jpg",
+  "reviewed": true,
+  "object_signature": "bbfa30bf83a655d07569dc15f09c49e1a704452ea893c8fbae1b87add35a040e",
+  "objects": [
+    {
+      "id": 0,
+      "class_id": 3,
+      "format": "obb",
+      "coordinates": [
+        0.366935,
+        0.463458,
+        0.384036,
+        0.446923,
+        0.501065,
+        0.830137,
+        0.483964,
+        0.846672
+      ]
+    },
+    {
+      "id": 1,
+      "class_id": 2,
+      "format": "obb",
+      "coordinates": [
+        0.490595,
+        0.187463,
+        0.560266,
+        0.028653,
+        0.713405,
+        0.241362,
+        0.643734,
+        0.400172
+      ]
+    },
+    {
+      "id": 2,
+      "class_id": 3,
+      "format": "obb",
+      "coordinates": [
+        0.574,
+        0.129893,
+        0.66,
+        0.129893,
+        0.66,
+        0.263345,
+        0.574,
+        0.263345
+      ]
+    },
+    {
+      "id": 3,
+      "class_id": 3,
+      "format": "obb",
+      "coordinates": [
+        0.618,
+        0.492883,
+        0.669,
+        0.492883,
+        0.669,
+        0.581851,
+        0.618,
+        0.581851
+      ]
+    },
+    {
+      "id": 4,
+      "class_id": 3,
+      "format": "obb",
+      "coordinates": [
+        0.568252,
+        0.295434,
+        0.625318,
+        0.290323,
+        0.638748,
+        0.765064,
+        0.581682,
+        0.770175
+      ]
+    },
+    {
+      "id": 5,
+      "class_id": 2,
+      "format": "obb",
+      "coordinates": [
+        0.341,
+        0.393238,
+        0.462,
+        0.393238,
+        0.462,
+        0.599644,
+        0.341,
+        0.599644
+      ]
+    },
+    {
+      "id": 6,
+      "class_id": 0,
+      "format": "obb",
+      "coordinates": [
+        0.666052,
+        0.352661,
+        0.662541,
+        0.46471,
+        0.404948,
+        0.439154,
+        0.408459,
+        0.327105
+      ]
+    },
+    {
+      "id": 7,
+      "class_id": 0,
+      "format": "obb",
+      "coordinates": [
+        0.655429,
+        0.57499,
+        0.682255,
+        0.711657,
+        0.430571,
+        0.868071,
+        0.403745,
+        0.731404
+      ]
+    },
+    {
+      "id": 8,
+      "class_id": 2,
+      "format": "obb",
+      "coordinates": [
+        0.484,
+        0.377224,
+        0.564,
+        0.377224,
+        0.564,
+        0.633452,
+        0.484,
+        0.633452
+      ]
+    }
+  ],
+  "relations": [
+    {
+      "source": 8,
+      "target": 6,
+      "type": "before"
+    },
+    {
+      "source": 4,
+      "target": 3,
+      "type": "before"
+    },
+    {
+      "source": 4,
+      "target": 6,
+      "type": "before"
+    },
+    {
+      "source": 4,
+      "target": 7,
+      "type": "before"
+    },
+    {
+      "source": 0,
+      "target": 7,
+      "type": "before"
+    },
+    {
+      "source": 0,
+      "target": 5,
+      "type": "before"
+    },
+    {
+      "source": 2,
+      "target": 1,
+      "type": "before"
+    },
+    {
+      "source": 1,
+      "target": 6,
+      "type": "before"
+    },
+    {
+      "source": 4,
+      "target": 1,
+      "type": "before"
+    }
+  ]
+}

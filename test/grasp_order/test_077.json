@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "image": "test_077.jpg",
+  "reviewed": true,
+  "object_signature": "3e1ab756ac7893b16e1dc385bf3ea15827a6bb206b00d56375bbcd0338cbf580",
+  "objects": [
+    {
+      "id": 0,
+      "class_id": 2,
+      "format": "obb",
+      "coordinates": [
+        0.01,
+        0.38968,
+        0.094,
+        0.38968,
+        0.094,
+        0.524911,
+        0.01,
+        0.524911
+      ]
+    }
+  ],
+  "relations": []
+}

@@ -1,0 +1,80 @@
+{
+  "version": 1,
+  "image": "train_239.png",
+  "reviewed": true,
+  "object_signature": "0eccfb1a8df41341f459d74ad9fce1a18eb32f6922bb4bda3fdbcd669288f203",
+  "objects": [
+    {
+      "id": 0,
+      "class_id": 0,
+      "format": "obb",
+      "coordinates": [
+        0.533631,
+        0.18163,
+        0.595078,
+        0.240619,
+        0.490671,
+        0.584958,
+        0.429224,
+        0.525969
+      ]
+    },
+    {
+      "id": 1,
+      "class_id": 1,
+      "format": "obb",
+      "coordinates": [
+        0.37041,
+        0.281914,
+        0.420978,
+        0.206842,
+        0.496206,
+        0.36728,
+        0.445638,
+        0.442352
+      ]
+    },
+    {
+      "id": 2,
+      "class_id": 2,
+      "format": "obb",
+      "coordinates": [
+        0.498,
+        0.259786,
+        0.608,
+        0.259786,
+        0.608,
+        0.377224,
+        0.498,
+        0.377224
+      ]
+    },
+    {
+      "id": 3,
+      "class_id": 2,
+      "format": "obb",
+      "coordinates": [
+        0.47611,
+        0.58022,
+        0.5306,
+        0.520467,
+        0.55489,
+        0.590599,
+        0.5004,
+        0.650352
+      ]
+    }
+  ],
+  "relations": [
+    {
+      "source": 0,
+      "target": 2,
+      "type": "before"
+    },
+    {
+      "source": 0,
+      "target": 3,
+      "type": "before"
+    }
+  ]
+}

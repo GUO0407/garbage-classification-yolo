@@ -1,0 +1,60 @@
+{
+  "version": 1,
+  "image": "test_074.jpg",
+  "reviewed": true,
+  "object_signature": "cc8e0e9a62b89c2d73a60dae693fc1540fe629bff554f5bbdc2c56e8cc50f99e",
+  "objects": [
+    {
+      "id": 0,
+      "class_id": 0,
+      "format": "obb",
+      "coordinates": [
+        0.587595,
+        0.29357,
+        0.580914,
+        0.408998,
+        0.349405,
+        0.366573,
+        0.356086,
+        0.251144
+      ]
+    },
+    {
+      "id": 1,
+      "class_id": 1,
+      "format": "obb",
+      "coordinates": [
+        0.386646,
+        0.311964,
+        0.476,
+        0.311388,
+        0.476354,
+        0.485189,
+        0.387,
+        0.485765
+      ]
+    },
+    {
+      "id": 2,
+      "class_id": 2,
+      "format": "obb",
+      "coordinates": [
+        0.373,
+        0.368327,
+        0.482,
+        0.368327,
+        0.482,
+        0.539146,
+        0.373,
+        0.539146
+      ]
+    }
+  ],
+  "relations": [
+    {
+      "source": 1,
+      "target": 2,
+      "type": "before"
+    }
+  ]
+}

@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "image": "test_075.jpg",
+  "reviewed": true,
+  "object_signature": "c8a89d3bc8f22847ee7a980364bbdf3767f06dbc5fb9609dfd2671f01a614fda",
+  "objects": [
+    {
+      "id": 0,
+      "class_id": 2,
+      "format": "obb",
+      "coordinates": [
+        0.372,
+        0.357651,
+        0.49,
+        0.357651,
+        0.49,
+        0.533808,
+        0.372,
+        0.533808
+      ]
+    },
+    {
+      "id": 1,
+      "class_id": 0,
+      "format": "obb",
+      "coordinates": [
+        0.583065,
+        0.289867,
+        0.575457,
+        0.413884,
+        0.350935,
+        0.370276,
+        0.358543,
+        0.246258
+      ]
+    }
+  ],
+  "relations": []
+}
